@@ -7,7 +7,10 @@ import { tokenizeArgs } from "args-tokenizer";
 import { cli } from "gunshi";
 import ReadlineTransform from "readline-transform";
 
-type OutputAndExec = Output & { exec: Result };
+type OutputAndExec = Output & { 
+  exec: Result;
+  collector?: StreamLinesCollector<CapturedLine>;
+};
 type Race<T> = {
   promise: Promise<T>;
   index: number;
@@ -28,9 +31,9 @@ class TimestampTransform extends Transform {
     super({ objectMode: true });
   }
 
-  _transform(chunk: any, encoding: string, callback: Function) {
+  _transform(line: any, encoding: string, callback: Function) {
     this.push({
-      line: chunk,
+      line,
       timestamp: performance.now(),
     });
     callback();
@@ -44,7 +47,7 @@ function createLineTimestampTransform(stream: Readable) {
   return stream.pipe(readline).pipe(timestamp);
 }
 
-class StreamLinesCollector<T> {
+class StreamLinesCollector<T extends { stream: string; line: string; timestamp: number }> {
   private _lines: T[] = [];
   private _activeStreams = new Map<string, Readable>();
   private _resolveCompleted?: () => void;
@@ -64,8 +67,11 @@ class StreamLinesCollector<T> {
     this._activeStreams.set(name, stream);
     const transform = createLineTimestampTransform(stream);
 
-    transform.on("data", (data: T) => {
-      this._lines.push(data);
+    transform.on("data", (data: { line: string; timestamp: number }) => {
+      this._lines.push({
+        ...data,
+        stream: name
+      } as T);
     });
 
     transform.on("end", () => {
