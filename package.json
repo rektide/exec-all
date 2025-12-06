@@ -3,7 +3,10 @@
 	"version": "1.0.0",
 	"description": "",
 	"main": "dist/exec-all.js",
-	"bin": "./exec-all.ts",
+	"bin": {
+		"exec-all": "./exec-all.ts",
+		"ls-and-fd": "./ls-and-fd.ts"
+	},
 	"scripts": {
 		"test": "vitest",
 		"build": "tsc"
