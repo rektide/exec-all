@@ -6,7 +6,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => ["a.txt", "b.txt"]
     const deepFn = async () => ["a.txt", "a/sub.txt", "b.txt", "c.txt"]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
 
     expect(result).toHaveProperty("shallow")
     expect(result).toHaveProperty("deep")
@@ -29,7 +29,7 @@ describe("shallowThenDeep", () => {
       "file.txt",
     ]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["dir3", "file.txt"])
@@ -39,7 +39,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => []
     const deepFn = async () => ["a.txt", "b.txt", "c/d.txt"]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["a.txt", "b.txt", "c/d.txt"])
@@ -49,7 +49,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => ["a.txt", "b.txt"]
     const deepFn = async () => []
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual([])
@@ -59,7 +59,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => ["dir", "exact.txt"] // sorted
     const deepFn = async () => ["dir", "dir/file.txt", "exact.txt", "other.txt"] // sorted
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["other.txt"])
@@ -79,7 +79,7 @@ describe("shallowThenDeep", () => {
       "f",
     ]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["b", "d", "f"])
@@ -89,7 +89,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => ["ab", "abc"]
     const deepFn = async () => ["a", "ab", "abc", "abcd", "abx", "ac", "b"]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["a", "ac", "b"])
@@ -105,7 +105,7 @@ describe("shallowThenDeep", () => {
       "other",
     ]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["other"])
@@ -115,7 +115,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => ["m", "n", "o"]
     const deepFn = async () => ["a", "b", "c", "m", "n", "o", "z"]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["a", "b", "c", "z"])
@@ -125,7 +125,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => ["a", "b", "c"]
     const deepFn = async () => ["a", "b", "c", "x", "y", "z"]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["x", "y", "z"])
@@ -135,7 +135,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => ["b", "d", "f"]
     const deepFn = async () => ["a", "b", "c", "d", "e", "f", "g"]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["a", "c", "e", "g"])
@@ -145,7 +145,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => ["a", "b", "c"]
     const deepFn = async () => ["a", "a/1", "b", "b/2", "c", "c/3"]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual([])
@@ -155,7 +155,7 @@ describe("shallowThenDeep", () => {
     const shallowFn = async () => ["x", "y", "z"]
     const deepFn = async () => ["a", "b", "c"]
 
-    const result = shallowThenDeep("/tmp", "test", shallowFn, deepFn)
+    const result = shallowThenDeep("/tmp", "test", { shallowFn, deepFn })
     const deepResults = await result.deep
 
     expect(deepResults).toEqual(["a", "b", "c"])

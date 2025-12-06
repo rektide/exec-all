@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { x } from 'tinyexec';
+import { cli } from "gunshi";
 
 const DIRS = ["/tmp/a", "/tmp/b", "/tmp/c"]
-const SEARCH = process.argv[2]
 
 // use tinyexec to execute `ls | rg -SIN $search`, from the cwd of `dir`, to look in each directory and match `search` results with ripgrep.
 // make sure we have a shell context here, so we can pipe.
@@ -24,8 +24,13 @@ export async function findDeep(dir: string, search: string): Promise<string[]> {
 export function shallowThenDeep(
   dir: string,
   search: string,
-  shallowFn: (dir: string, search: string) => Promise<string[]> = findShallow,
-  deepFn: (dir: string, search: string) => Promise<string[]> = findDeep
+  {
+    shallowFn = findShallow,
+    deepFn = findDeep
+  }: {
+    shallowFn?: (dir: string, search: string) => Promise<string[]>;
+    deepFn?: (dir: string, search: string) => Promise<string[]>;
+  } = {}
 ) {
   // first kick off shallow search. 
   const shallow = shallowFn(dir, search)
@@ -74,8 +79,80 @@ export function shallowThenDeep(
   }
 }
 
-// run shallowThenDeep for each `dir` in DIRS
-// attach a `then` handler to each `shallow` and `deep` that logs the lines, preceeded by a header with the `dir`
-function main() {
+async function runLsAndFd(search: string, dirs: string[] = DIRS) {
+  // Start all searches and attach handlers to print results as they complete
+  const promises: Promise<unknown>[] = [];
+  
+  for (const dir of dirs) {
+    const { shallow, deep } = shallowThenDeep(dir, search);
+    
+    // Handle shallow results when they're ready
+    promises.push(
+      shallow.then(shallowResults => {
+        if (shallowResults.length > 0) {
+          console.log(`\n=== ${dir} (shallow) ===`);
+          for (const item of shallowResults) {
+            console.log(item);
+          }
+        }
+      }).catch(err => {
+        console.error(`Error in shallow search for ${dir}:`, err);
+      })
+    );
+    
+    // Handle deep results when they're ready (after shallow completes)
+    promises.push(
+      deep.then(deepResults => {
+        if (deepResults.length > 0) {
+          console.log(`\n=== ${dir} (deep) ===`);
+          for (const item of deepResults) {
+            console.log(item);
+          }
+        }
+      }).catch(err => {
+        console.error(`Error in deep search for ${dir}:`, err);
+      })
+    );
+  }
+  
+  // Wait for all searches to complete
+  await Promise.allSettled(promises);
+}
 
+const command = {
+  name: "ls-and-fd",
+  description: "Search for files using shallow (ls) then deep (fd) search",
+  args: {
+    dirs: {
+      type: "string" as const,
+      description: "Directories to search (comma-separated, default: /tmp/a,/tmp/b,/tmp/c)",
+    },
+  },
+  examples: `
+# Search for "test" in default directories
+ls-and-fd test
+
+# Search for "*.ts" in specific directories
+ls-and-fd "*.ts" --dirs src,lib,tests
+
+# Search for files containing "main"
+ls-and-fd main
+  `.trim(),
+  run: async (ctx: any) => {
+    const dirsArg = ctx.values.dirs;
+    const dirs = dirsArg ? dirsArg.split(",") : DIRS;
+    const search = ctx.positionals[0];
+    
+    if (!search) {
+      console.error("Error: No search pattern provided");
+      console.error("Usage: ls-and-fd <search-pattern> [--dirs dir1,dir2,...]");
+      process.exit(1);
+    }
+
+    await runLsAndFd(search, dirs);
+  },
+};
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  cli(process.argv.slice(2), command);
 }
