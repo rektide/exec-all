@@ -1,0 +1,40 @@
+#!/usr/bin/env node
+import { x } from 'tinyexec';
+
+const DIRS = ["/tmp/a", "/tmp/b", "/tmp/c"]
+const SEARCH = process.argv[2]
+
+// use tinyexec to execute `ls | rg -SIN $SEARCH`, from the cwd of `dir`, to look in each directory and match `SEARCH` results with ripgrep.
+// make sure we have a shell context here, so we can pipe.
+async function findShallow(dir: string): string[] {
+
+}
+
+// want to run `fd $dir`, again looking for `SEARCH`, but this time as a deep search.
+async function findDeep(dir: string): string[] {
+
+}
+
+function shallowThenDeep(dir: string) {
+  // first kick off shallow search. 
+  const shallow = findShallow(dir)
+
+  // second, call `then` on the shallow results and kick off `deep`.
+  const deep = shallow.then(async function stage2(shallow) {
+    const deep = await findDeep(deep)
+    // now sort shallow and deep
+    // then walk through shallow and deep in order, and put in `result` any matches in `deep` that do not have a matching `shallow` prefix
+    const result: string[] = [];
+  })
+  // finally, return {shallow, deep} with each results
+  return {
+    shallow,
+    deep
+  }
+}
+
+// run shallowThenDeep for each `dir` in DIRS
+// attach a `then` handler to each `shallow` and `deep` that logs the lines, preceeded by a header with the `dir`
+function main() {
+
+}
