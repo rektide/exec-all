@@ -7,7 +7,7 @@ import { tokenizeArgs } from "args-tokenizer";
 import { cli } from "gunshi";
 import ReadlineTransform from "readline-transform";
 
-type OutputAndExec = Output & { 
+type OutputAndExec = Output & {
   exec: Result;
   collector?: StreamLinesCollector<CapturedLine>;
 };
@@ -47,8 +47,8 @@ function createLineTimestampTransform(stream: Readable) {
   return stream.pipe(readline).pipe(timestamp);
 }
 
-class StreamLinesCollector<T extends { stream: string; line: string; timestamp: number }> {
-  private _lines: T[] = [];
+class StreamLinesCollector<T> {
+  private _lines: (T & { stream: string })[] = [];
   private _activeStreams = new Map<string, Readable>();
   private _resolveCompleted?: () => void;
   private _completedPromise = new Promise<void>((resolve) => {
@@ -67,11 +67,10 @@ class StreamLinesCollector<T extends { stream: string; line: string; timestamp: 
     this._activeStreams.set(name, stream);
     const transform = createLineTimestampTransform(stream);
 
-    transform.on("data", (data: { line: string; timestamp: number }) => {
-      this._lines.push({
-        ...data,
-        stream: name
-      } as T);
+    transform.on("data", (data: T) => {
+      const inplace = data as unknown as T & { stream: string };
+      inplace.stream = name;
+      this._lines.push(inplace);
     });
 
     transform.on("end", () => {
@@ -117,16 +116,12 @@ export async function* raceCmds<T>(
   const remaining = cmds.map(async function runCommand(cmd: string) {
     const [command, ...args] = tokenizeArgs(cmd);
     const exec = x(command, args);
-    
+
     // Create collector for stdout/stderr streams
     const collector = new StreamLinesCollector<CapturedLine>();
-    if (exec.process?.stdout) {
-      collector.addStream("stdout", exec.process.stdout);
-    }
-    if (exec.process?.stderr) {
-      collector.addStream("stderr", exec.process.stderr);
-    }
-    
+    collector.addStream("stdout", exec.process.stdout);
+    collector.addStream("stderr", exec.process.stderr);
+
     const result = (await exec) as unknown as OutputAndExec;
     result.exec = exec;
     result.collector = collector;
@@ -162,23 +157,15 @@ export async function execAll(cmds: string[] = process.argv.slice(2), options: E
     // actual results
     if ("reason" in cmd) {
       console.error(cmd.reason);
-    } else {
-      // Use collected lines if available
-      if (cmd.value.collector) {
-        await cmd.value.collector.finished();
-        for (const line of cmd.value.collector) {
-          if (line.stream === "stdout") {
-            console.log(line.line);
-          } else {
-            console.error(line.line);
-          }
-        }
+      continue;
+    }
+
+    await cmd.value.collector.finished();
+    for (const line of cmd.value.collector) {
+      if (line.stream === "stdout") {
+        console.log(line.line);
       } else {
-        // Fallback to original stdout/stderr
-        console.log(cmd.value.stdout);
-        if (cmd.value.stderr) {
-          console.error(cmd.value.stderr);
-        }
+        console.error(line.line);
       }
     }
   }
@@ -213,12 +200,9 @@ exec-all "sh -c 'sleep 2 && echo done'" "echo immediate"
       process.exit(1);
     }
     await execAll(commands, { quiet });
-  }
+  },
 };
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  cli(process.argv.slice(2), command, {
-    name: "exec-all",
-    version: "1.0.0"
-  });
+  cli(process.argv.slice(2), command);
 }
