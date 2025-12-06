@@ -2,12 +2,17 @@
 import process from "node:process";
 import { type Output, type Result, x } from "tinyexec";
 import { tokenizeArgs } from "args-tokenizer";
+import { cli } from "gunshi";
 
 type OutputAndExec = Output & { exec: Result };
 type Race<T> = {
   promise: Promise<T>;
   index: number;
 } & ({ value: T; reason?: undefined } | { value?: undefined; reason: any });
+
+interface ExecAllOptions {
+  quiet?: boolean;
+}
 
 /**
  * Promise.race() that returns the `promise` and `index` of the promise that won the race, as well as the `value`
@@ -52,17 +57,19 @@ export async function* raceCmds<T>(
   }
 }
 
-export async function execAll(cmds: string[] = process.argv.slice(2)) {
+export async function execAll(cmds: string[] = process.argv.slice(2), options: ExecAllOptions = {}) {
   let firstCmd = true;
   for await (let cmd of raceCmds(cmds)) {
     // empty console.error if this is not the first cmd to return, to add visual-separation
-    if (!firstCmd) {
+    if (!firstCmd && !options.quiet) {
       console.error();
       firstCmd = false;
     }
 
     // console.error with the cmd.process.spawnfile so the user can tell
-    console.error(`  --> ${cmd.value.exec.process.spawnargs?.join(" ")}`);
+    if (!options.quiet) {
+      console.error(`  --> ${cmd.value.exec.process.spawnargs?.join(" ")}`);
+    }
 
     // actual results
     if ("reason" in cmd) {
@@ -77,6 +84,41 @@ export async function execAll(cmds: string[] = process.argv.slice(2)) {
   }
 }
 
+const command = {
+  name: "exec-all",
+  description: "Run multiple programs, see complete results when first available",
+  args: {
+    quiet: {
+      type: "boolean" as const,
+      short: "q",
+      description: "Quiet mode - don't show separator messages"
+    }
+  },
+  examples: `
+# Run two echo commands
+exec-all "echo hello" "echo world"
+
+# Run commands quietly
+exec-all -q "sleep 1 && echo slow" "echo fast"
+
+# Use shell for complex commands
+exec-all "sh -c 'sleep 2 && echo done'" "echo immediate"
+  `.trim(),
+  run: async (ctx: any) => {
+    const { quiet } = ctx.values;
+    const commands = ctx.positionals;
+    if (!commands || commands.length === 0) {
+      console.error("Error: No commands provided");
+      console.error("Usage: exec-all [options] <command1> <command2> ...");
+      process.exit(1);
+    }
+    await execAll(commands, { quiet });
+  }
+};
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  execAll();
+  cli(process.argv.slice(2), command, {
+    name: "exec-all",
+    version: "1.0.0"
+  });
 }
