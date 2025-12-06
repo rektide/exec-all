@@ -117,8 +117,19 @@ export async function* raceCmds<T>(
   const remaining = cmds.map(async function runCommand(cmd: string) {
     const [command, ...args] = tokenizeArgs(cmd);
     const exec = x(command, args);
+    
+    // Create collector for stdout/stderr streams
+    const collector = new StreamLinesCollector<CapturedLine>();
+    if (exec.process?.stdout) {
+      collector.addStream("stdout", exec.process.stdout);
+    }
+    if (exec.process?.stderr) {
+      collector.addStream("stderr", exec.process.stderr);
+    }
+    
     const result = (await exec) as unknown as OutputAndExec;
     result.exec = exec;
+    result.collector = collector;
     return result;
   });
 
@@ -152,10 +163,22 @@ export async function execAll(cmds: string[] = process.argv.slice(2), options: E
     if ("reason" in cmd) {
       console.error(cmd.reason);
     } else {
-      // we need a way to record and reassemble both streams in order
-      console.log(cmd.value.stdout);
-      if (cmd.value.stderr) {
-        console.error(cmd.value.stderr);
+      // Use collected lines if available
+      if (cmd.value.collector) {
+        await cmd.value.collector.finished();
+        for (const line of cmd.value.collector) {
+          if (line.stream === "stdout") {
+            console.log(line.line);
+          } else {
+            console.error(line.line);
+          }
+        }
+      } else {
+        // Fallback to original stdout/stderr
+        console.log(cmd.value.stdout);
+        if (cmd.value.stderr) {
+          console.error(cmd.value.stderr);
+        }
       }
     }
   }
