@@ -1,0 +1,23 @@
+{
+	"name": "exec-all",
+	"version": "1.0.0",
+	"description": "",
+	"main": "exec-all.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://archive.voodoowarez.com/exec-all"
+	},
+	"keywords": [],
+	"author": "rektide de la faye",
+	"license": "MIT",
+	"type": "commonjs",
+	"module": "exec-all.js",
+	"dependencies": {
+		"args-tokenizer": "^0.3.0",
+		"gunshi": "0.27.0-beta.3",
+		"tinyexec": "^1.0.2"
+	}
+}
