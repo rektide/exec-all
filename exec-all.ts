@@ -14,6 +14,78 @@ interface ExecAllOptions {
   quiet?: boolean;
 }
 
+interface CapturedLine {
+  stream: 'stdout' | 'stderr';
+  line: string;
+  timestamp: number; // high resolution timestamp
+}
+
+class OutputCapture {
+  private lines: CapturedLine[] = [];
+  private stdoutClosed = false;
+  private stderrClosed = false;
+  private resolveClosed?: () => void;
+  private closedPromise = new Promise<void>((resolve) => {
+    this.resolveClosed = resolve;
+  });
+
+  constructor(private process: import('node:child_process').ChildProcess) {
+    this.setupStreamCapture('stdout', process.stdout);
+    this.setupStreamCapture('stderr', process.stderr);
+    
+    process.on('close', () => {
+      this.stdoutClosed = true;
+      this.stderrClosed = true;
+      this.checkClosed();
+    });
+  }
+
+  private setupStreamCapture(stream: 'stdout' | 'stderr', readable: import('node:stream').Readable | null) {
+    if (!readable) return;
+
+    const readline = require('node:readline');
+    const rl = readline.createInterface({
+      input: readable,
+      crlfDelay: Infinity
+    });
+
+    rl.on('line', (line: string) => {
+      this.lines.push({
+        stream,
+        line,
+        timestamp: performance.now()
+      });
+    });
+
+    readable.on('end', () => {
+      if (stream === 'stdout') this.stdoutClosed = true;
+      if (stream === 'stderr') this.stderrClosed = true;
+      this.checkClosed();
+    });
+
+    readable.on('error', () => {
+      if (stream === 'stdout') this.stdoutClosed = true;
+      if (stream === 'stderr') this.stderrClosed = true;
+      this.checkClosed();
+    });
+  }
+
+  private checkClosed() {
+    if (this.stdoutClosed && this.stderrClosed && this.resolveClosed) {
+      this.resolveClosed();
+    }
+  }
+
+  async getLines(): Promise<CapturedLine[]> {
+    await this.closedPromise;
+    return this.lines;
+  }
+
+  getLinesSync(): CapturedLine[] {
+    return [...this.lines];
+  }
+}
+
 /**
  * Promise.race() that returns the `promise` and `index` of the promise that won the race, as well as the `value`
  */
