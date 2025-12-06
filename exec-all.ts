@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import process from "node:process";
+import Readline from "node:readline";
+import { type Readable, Transform } from "node:stream";
 import { type Output, type Result, x } from "tinyexec";
 import { tokenizeArgs } from "args-tokenizer";
 import { cli } from "gunshi";
+import ReadlineTransform from "readline-transform";
 
 type OutputAndExec = Output & { exec: Result };
 type Race<T> = {
@@ -15,74 +18,70 @@ interface ExecAllOptions {
 }
 
 interface CapturedLine {
-  stream: 'stdout' | 'stderr';
+  stream: "stdout" | "stderr";
   line: string;
   timestamp: number; // high resolution timestamp
 }
 
-class OutputCapture {
-  private lines: CapturedLine[] = [];
-  private stdoutClosed = false;
-  private stderrClosed = false;
-  private resolveClosed?: () => void;
-  private closedPromise = new Promise<void>((resolve) => {
-    this.resolveClosed = resolve;
+class TimestampTransform extends Transform {
+  constructor() {
+    super({ objectMode: true });
+  }
+
+  _transform(chunk: any, encoding: string, callback: Function) {
+    this.push({
+      line: chunk,
+      timestamp: performance.now(),
+    });
+    callback();
+  }
+}
+
+function createLineTimestampTransform(stream: Readable) {
+  const readline = new ReadlineTransform({ skipEmpty: false });
+  const timestamp = new TimestampTransform();
+
+  return stream.pipe(readline).pipe(timestamp);
+}
+
+class StreamLinesCollector<T> {
+  private _lines: T[] = [];
+  private _activeStreams = new Map<string, Readable>();
+  private _resolveCompleted?: () => void;
+  private _completedPromise = new Promise<void>((resolve) => {
+    this._resolveCompleted = resolve;
   });
 
-  constructor(private process: import('node:child_process').ChildProcess) {
-    this.setupStreamCapture('stdout', process.stdout);
-    this.setupStreamCapture('stderr', process.stderr);
-    
-    process.on('close', () => {
-      this.stdoutClosed = true;
-      this.stderrClosed = true;
-      this.checkClosed();
-    });
-  }
-
-  private setupStreamCapture(stream: 'stdout' | 'stderr', readable: import('node:stream').Readable | null) {
-    if (!readable) return;
-
-    const readline = require('node:readline');
-    const rl = readline.createInterface({
-      input: readable,
-      crlfDelay: Infinity
-    });
-
-    rl.on('line', (line: string) => {
-      this.lines.push({
-        stream,
-        line,
-        timestamp: performance.now()
-      });
-    });
-
-    readable.on('end', () => {
-      if (stream === 'stdout') this.stdoutClosed = true;
-      if (stream === 'stderr') this.stderrClosed = true;
-      this.checkClosed();
-    });
-
-    readable.on('error', () => {
-      if (stream === 'stdout') this.stdoutClosed = true;
-      if (stream === 'stderr') this.stderrClosed = true;
-      this.checkClosed();
-    });
-  }
-
-  private checkClosed() {
-    if (this.stdoutClosed && this.stderrClosed && this.resolveClosed) {
-      this.resolveClosed();
+  constructor(streams?: Array<{ name: string; stream: Readable }>) {
+    if (streams) {
+      for (const stream of streams) {
+        this.addStream(stream.name, stream.stream);
+      }
     }
   }
 
-  async getLines(): Promise<CapturedLine[]> {
-    await this.closedPromise;
-    return this.lines;
+  addStream(name: string, stream: Readable) {
+    this._activeStreams.set(name, stream);
+    const transform = createLineTimestampTransform(stream);
+
+    transform.on("data", (data: T) => {
+      this._lines.push(data);
+    });
+
+    transform.on("end", () => {
+      this._activeStreams.delete(name);
+      if (this._activeStreams.size === 0 && this._resolveCompleted) {
+        this._resolveCompleted();
+      }
+    });
   }
 
-  getLinesSync(): CapturedLine[] {
-    return [...this.lines];
+  async finished() {
+    return await this._completedPromise;
+  }
+
+  *[Symbol.iterator]() {
+    yield* this._lines;
   }
 }
 
@@ -109,7 +108,7 @@ export async function* raceCmds<T>(
   // use arg-tokenizer to parse each cmd into their component tokens
   // map each use tinyexec to launch each cmd with it's arguments, saving each promise into
 
-  const remaining = cmds.map(async (cmd: string) => {
+  const remaining = cmds.map(async function runCommand(cmd: string) {
     const [command, ...args] = tokenizeArgs(cmd);
     const exec = x(command, args);
     const result = (await exec) as unknown as OutputAndExec;
