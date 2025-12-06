@@ -3,22 +3,19 @@ import process from "node:process";
 import { type Output, type Result, x } from "tinyexec";
 import { tokenizeArgs } from "args-tokenizer";
 
+type OutputAndExec = Output & { exec: Result };
+type Race<T> = {
+  promise: Promise<T>;
+  index: number;
+} & ({ value: T; reason?: undefined } | { value?: undefined; reason: any });
+
 /**
  * Promise.race() that returns the `promise` and `index` of the promise that won the race, as well as the `value`
  */
-function raceWithIndex(promises: Iterable<Result>): Promise<
-  & {
-    promise: Result;
-    index: number;
-  }
-  & (
-    | { value: Output; error?: undefined }
-    | { value?: undefined; reason: any }
-  )
-> {
+function raceWithIndex<T>(promises: Iterable<Promise<T>>): Promise<Race<T>> {
   // Map each promise with a wrapper that captures the `promise` and `index` while forwarding the `value`.
   // If the promise throws, instead of a `value` there will be an `reason`
-  const mapped = promises.map((promise, index) =>
+  const mapped = Array.from(promises).map((promise, index) =>
     promise.then(
       (value) => ({ promise, index, value }),
       (reason) => ({ promise, index, reason }),
@@ -28,13 +25,19 @@ function raceWithIndex(promises: Iterable<Result>): Promise<
   return Promise.race(mapped);
 }
 
-export async function* raceCmds(cmds: string[] = process.argv.slice(2)) {
+export async function* raceCmds<T>(
+  cmds: string[] = process.argv.slice(2),
+): AsyncGenerator<Race<OutputAndExec>, void, undefined> {
   // launch cmds phase
   // use arg-tokenizer to parse each cmd into their component tokens
   // map each use tinyexec to launch each cmd with it's arguments, saving each promise into
-  const remaining = cmds.map((cmd: string) => {
+
+  const remaining = cmds.map(async (cmd: string) => {
     const [command, ...args] = tokenizeArgs(cmd);
-    return x(command, args);
+    const exec = x(command, args);
+    const result = (await exec) as unknown as OutputAndExec;
+    result.exec = exec;
+    return result;
   });
 
   // stream results phase
@@ -59,7 +62,7 @@ export async function execAll(cmds: string[] = process.argv.slice(2)) {
     }
 
     // console.error with the cmd.process.spawnfile so the user can tell
-    console.error(`  --> ${cmd.promise.process?.spawnargs?.join(" ")}`);
+    console.error(`  --> ${cmd.value.exec.process.spawnargs?.join(" ")}`);
 
     // actual results
     if ("reason" in cmd) {
