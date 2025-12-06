@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import { x } from 'tinyexec';
 import { cli } from "gunshi";
 
@@ -142,7 +143,7 @@ ls-and-fd main
     const dirsArg = ctx.values.dirs;
     const dirs = dirsArg ? dirsArg.split(",") : DIRS;
     const search = ctx.positionals[0];
-    
+
     if (!search) {
       console.error("Error: No search pattern provided");
       console.error("Usage: ls-and-fd <search-pattern> [--dirs dir1,dir2,...]");
@@ -153,6 +154,7 @@ ls-and-fd main
   },
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+
+if (import.meta.url === `file://${realpathSync(process.argv[1])}`) {
   cli(process.argv.slice(2), command);
 }

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-import process from "node:process";
-import Readline from "node:readline";
-import { type Readable, Transform } from "node:stream";
-import { type Output, type Result, x } from "tinyexec";
-import { tokenizeArgs } from "args-tokenizer";
-import { cli } from "gunshi";
-import ReadlineTransform from "readline-transform";
+import { realpathSync } from "node:fs"
+import process from "node:process"
+import Readline from "node:readline"
+import { type Readable, Transform } from "node:stream"
+import { type Output, type Result, x } from "tinyexec"
+import { tokenizeArgs } from "args-tokenizer"
+import { cli } from "gunshi"
+import ReadlineTransform from "readline-transform"
 
 type OutputAndExec = Output & {
   exec: Result;
@@ -203,6 +204,6 @@ exec-all "sh -c 'sleep 2 && echo done'" "echo immediate"
   },
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  cli(process.argv.slice(2), command);
+if (import.meta.url === `file://${realpathSync(process.argv[1])}`) {
+  cli(process.argv.slice(2), command)
 }
